@@ -1,0 +1,58 @@
+import ccxt
+import time
+import requests
+import operator
+import logging
+
+# 你的钉钉机器人Webhook URL
+DINGTALK_WEBHOOK = 'https://oapi.dingtalk.com/robot/send?access_token=your_dingtalk_access_token'
+# 设置日志格式
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def send_dingtalk_msg(msg):
+    headers = {'Content-Type': 'application/json;charset=utf-8'}
+    data = {"msgtype": "text", "text": {"content": msg}}
+    response = requests.post(DINGTALK_WEBHOOK, json=data, headers=headers)
+    if response.status_code == 200:
+        logging.info("钉钉消息发送成功")
+    else:
+        logging.error("钉钉消息发送失败，错误码： %s", response.status_code)
+
+def get_top_gainers(exchange, limit=20):
+    tickers = exchange.fetch_tickers()
+    gainers = {}
+    for symbol, ticker in tickers.items():
+        if 'baseVolume' in ticker and 'percentage' in ticker:
+            gainers[symbol] = ticker['percentage']
+        sorted_gainers = dict(sorted(gainers.items(), key=operator.itemgetter(1), reverse=True)[:limit])
+    return sorted_gainers
+
+# OKEx API credentials
+api_key = 'your_api_key'
+api_secret = 'your_api_secret'
+password = 'your_password'
+
+# 创建 OKEx 交易所实例
+exchange = ccxt.okex({
+    'apiKey': api_key,
+    'secret': api_secret,
+    'password': password,  # 仅在使用 okex 交易所时需要
+    'enableRateLimit': True,  # 为避免触发频率限制，建议启用
+})
+
+def main():
+    exchange = ccxt.okex()
+    while True:
+        try:
+            top_gainers = get_top_gainers(exchange)
+            msg = "涨幅前20的币种：\n"
+            for symbol, percentage in top_gainers.items():
+                msg += f"{symbol}: {percentage}%\n"
+            send_dingtalk_msg(msg)
+            logging.info("成功获取涨幅前20的币种并发送钉钉消息")
+        except Exception as e:
+            logging.error("获取涨幅或发送钉钉消息时出错： %s", e)
+        time.sleep(30 * 60)  # 等待30分钟
+
+if __name__ == "__main__":
+    main()
